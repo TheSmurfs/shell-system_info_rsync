@@ -1,0 +1,78 @@
+检查rsync xinetd是否安装，如果没有安装，请使用yum进行安装
+yum -y install rsync xinetd
+
+1. ssh 认证协议
+rsync server端不用启动rsync的daemon进程，只要获取remote host的用户名和密码就可以直接rsync同步文件
+rsync server端因为不用启动daemon进程，所以也不用配置文件 /etc/rsyncd.conf
+ssh认证协议跟scp的原理是一样的，如果在同步过程中不想输入密码，就需要配置ssh的密钥登录
+
+2. rsync 认证协议
+需要在rsync server端启动daemon进程，并设置对应的配置文件: /etc/rsyncd.conf 
+如果不想输入密码，就需要在服务器进行下面的配置：
+cat /etc/rsyncd.conf
+#以指定的 UID 传输文件
+uid=nobody
+#以指定的 GID 传输文件
+gid=nobody
+#允许指定主机访问
+#hosts allow=10.50.53.100
+#阻止指定主机访问
+#hosts deny=0.0.0.0/32
+use chroot=no
+#允许的最大连接数
+max connections=10
+#指定pid文件路径
+pid file=/var/run/rsyncd.pid
+#指定进程锁文件
+lock file=/var/run/rsync.lock
+#指定日志路径          
+log file=/var/log/rsyncd.log
+#连接超时时间,通过该选项可以确保rsync服务器不会永远等待一个崩溃的客户端
+timeout=600
+
+[backup]
+#同步的目录，如果需要对该目录进行写入，还需要注意该目录的属主及属组
+path=/data
+comment=rsync files
+read only=no
+
+list=yes
+auth users=test01
+secrets file=/etc/.rsyncd.secrets
+
+4.创建密码文件
+#格式为 用户名：密码用户
+#用户名跟配置文件指定的（auth users）相同
+echo "test01:123456" >/etc/.rsyncd.secrets
+
+5.必须设定文件的权限600
+chmod 600 /etc/.rsyncd.secrets
+
+6.启动
+设为开机启动
+chkconfig rsync on
+
+查看开机启动
+chkconfig --list rsync
+    rsync              on
+
+启动服务
+service xinetd start
+
+
+
+
+客户端：
+
+1.添加密码文件
+echo "123456" > /etc/.rsync.passwd
+chmod 600 /etc/.rsync.passwd
+
+2.同步数据
+cd /rsync_data
+rsync -avzc --delete --password-file=/etc/.rsync.passwd test01@172.16.210.10::backup .
+或者
+rsync -avzcR --delete --password-file=/etc/.rsync.passwd test01@172.16.210.10::backup .
+
+
+
